@@ -1,0 +1,12 @@
+{
+  "name": "jci-fukuyama-interpreter",
+  "version": "1.0.0",
+  "description": "JCI Fukuyama Live Interpreter with WebSocket Streaming",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

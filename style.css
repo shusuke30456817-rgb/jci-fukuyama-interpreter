@@ -1,0 +1,600 @@
+/* ==========================================================================
+   JCI Fukuyama Live Interpreter - Pure Flat White Theme (v4)
+   真っ白なフラットデザイン & 日本語メイン積み上げ型スクリーン
+   ========================================================================== */
+
+:root {
+  /* 純白・フラットカラーパレット */
+  --bg-pure: #ffffff;
+  --text-ja-main: #0a0f1d;      /* 漆黒ネイビー（最高視認性・遠くからも一目で読める） */
+  --text-en-sub: #64748b;       /* 控えめな英語スレートグレー */
+  --text-active-ja: #0284c7;    /* 今話している最中の日本語（鮮やかなブルー） */
+  --text-active-en: #94a3b8;    /* 今話している最中の英語 */
+  --text-muted: #94a3b8;
+  
+  --primary: #005596;          /* JCI公式ネイビーブルー */
+  --primary-hover: #003e6e;
+  --danger: #ef4444;
+  --border-clean: #f1f5f9;
+
+  /* 文字サイズ変数（デフォルト: large - 一覧性と可読性の黄金比） */
+  --font-ja: 2.25rem;          /* 36px */
+  --font-en: 1.15rem;          /* 18px */
+  --line-height-ja: 1.45;
+  --line-height-en: 1.3;
+}
+
+/* 文字サイズ切り替え */
+body[data-font-size="normal"] {
+  --font-ja: 1.85rem;
+  --font-en: 1.0rem;
+}
+
+body[data-font-size="large"] {
+  --font-ja: 2.25rem;
+  --font-en: 1.15rem;
+}
+
+body[data-font-size="xlarge"] {
+  --font-ja: 2.85rem;
+  --font-en: 1.35rem;
+}
+
+/* リセット */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg-pure);
+  color: var(--text-ja-main);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* 全体レイアウト */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 1650px;
+  margin: 0 auto;
+  padding: 1.25rem 3.5rem 1.25rem 3.5rem;
+  background-color: var(--bg-pure);
+}
+
+/* ==========================================================================
+   フラットヘッダー（余計な枠やシャドウを排除）
+   ========================================================================== */
+.flat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0 1rem 0;
+  border-bottom: 1px solid var(--border-clean);
+  margin-bottom: 1.25rem;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.live-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #cbd5e1;
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.live-dot.active {
+  background-color: #ef4444;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.8);
+  animation: pulse-dot 1.4s infinite;
+}
+
+@keyframes pulse-dot {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.status-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.02em;
+}
+
+.status-text.listening {
+  color: var(--primary);
+}
+
+/* マイク音量メーター */
+.volume-meter-wrapper {
+  width: 60px;
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.volume-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #10b981, #0284c7);
+  border-radius: 4px;
+  transition: width 0.08s ease;
+}
+
+.badge-required {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0369a1;
+  background: #e0f2fe;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  margin-left: 0.4rem;
+}
+
+.translating-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0284c7;
+  background: #f0f9ff;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+}
+
+.pulse-ring {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #0284c7;
+  animation: pulse-dot 1s infinite;
+}
+
+/* ヘッダー操作ボタングループ */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-flat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.15rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.btn-flat .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.btn-mic {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.btn-mic:hover {
+  background: var(--primary-hover);
+}
+
+.btn-mic.recording {
+  background: var(--danger);
+  animation: recording-glow 2s infinite;
+}
+
+@keyframes recording-glow {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.btn-secondary {
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.btn-secondary:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* 文字サイズ切り替えピル */
+.font-size-toggle {
+  display: flex;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.btn-text-size {
+  border: none;
+  background: transparent;
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-text-size:hover {
+  color: #0f172a;
+}
+
+.btn-text-size.active {
+  background: #ffffff;
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* 音量メーター */
+.volume-meter-wrapper {
+  width: 60px;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.volume-bar {
+  height: 100%;
+  width: 0%;
+  background: #10b981;
+  border-radius: 9999px;
+  transition: width 0.08s ease;
+}
+
+/* クイック英語テキスト入力・貼り付けバー */
+.manual-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-clean);
+  flex-shrink: 0;
+  animation: fadeInSentence 0.15s ease;
+}
+
+.manual-text-input {
+  flex: 1;
+  padding: 0.65rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  outline: none;
+  background: #ffffff;
+  color: var(--text-ja-main);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.manual-text-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0, 85, 166, 0.12);
+}
+
+/* ==========================================================================
+   メイン：日本語が自然に積み上がる字幕表示領域
+   ========================================================================== */
+.transcript-main {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding-right: 1.25rem;
+  scroll-behavior: smooth;
+  margin-bottom: 0.75rem;
+}
+
+.transcript-main::-webkit-scrollbar {
+  width: 6px;
+}
+.transcript-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+.transcript-main::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+.welcome-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 40vh;
+  text-align: center;
+  color: #94a3b8;
+  gap: 0.75rem;
+}
+
+.welcome-lead {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.welcome-sub {
+  font-size: 1rem;
+}
+
+.committed-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sentence-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  animation: fadeInSentence 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInSentence {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sentence-en {
+  font-size: var(--font-en);
+  line-height: var(--line-height-en);
+  color: var(--text-en-sub);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.sentence-ja {
+  font-size: var(--font-ja);
+  line-height: var(--line-height-ja);
+  color: var(--text-ja-main);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  word-break: break-word;
+}
+
+.live-active-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 1.5rem;
+  padding-left: 1.25rem;
+  border-left: 4px solid var(--text-active-ja);
+  animation: fadeInSentence 0.2s ease;
+}
+
+.active-en-line {
+  font-size: var(--font-en);
+  line-height: var(--line-height-en);
+  color: var(--text-active-en);
+  font-weight: 500;
+  font-style: italic;
+}
+
+.active-ja-line {
+  font-size: var(--font-ja);
+  line-height: var(--line-height-ja);
+  color: var(--text-active-ja);
+  font-weight: 800;
+  word-break: break-word;
+  transition: color 0.15s ease;
+}
+
+/* ==========================================================================
+   フラットフッター（JCIロゴを2倍のサイズ・145px〜165pxで堂々と配置）
+   ========================================================================== */
+.flat-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem 0 0.5rem 0;
+  background-color: var(--bg-pure);
+  flex-shrink: 0;
+}
+
+.footer-logo-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* JCIロゴ（クロップ済み高精細画像：実体サイズが従来の2倍以上） */
+.jci-logo-large {
+  height: 90px;
+  max-width: 320px;
+  width: auto;
+  object-fit: contain;
+  transition: transform 0.25s ease;
+}
+
+.jci-logo-large:hover {
+  transform: scale(1.02);
+}
+
+/* ==========================================================================
+   設定モーダル
+   ========================================================================== */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-dialog {
+  background: #ffffff;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 540px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-clean);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-ja-main);
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+.setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.setting-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-ja-main);
+}
+
+.form-select, .form-input {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: #ffffff;
+  color: var(--text-ja-main);
+}
+
+.setting-hint {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.demo-buttons {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.btn-sm {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-clean);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ==========================================================================
+   全画面モード（大画面・プロジェクター）
+   ========================================================================== */
+:fullscreen .app-layout {
+  padding: 1.5rem 4.5rem 1.25rem 4.5rem;
+  max-width: 100%;
+  height: 100vh;
+}
+
+:fullscreen .jci-logo-large {
+  height: 110px;
+  max-width: 380px;
+}
+
+@media (max-width: 768px) {
+  .app-layout {
+    padding: 1rem 1rem 0.5rem 1rem;
+  }
+  .jci-logo-large {
+    height: 90px;
+  }
+}

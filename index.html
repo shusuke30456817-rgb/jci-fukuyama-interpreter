@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JCI 福山 | 英語講演 リアルタイムAI同時通訳字幕</title>
+  <meta name="description" content="Gemini AI搭載 JCI福山 英語講演向けプロフェッショナル同時通訳スクリーン">
+  
+  <!-- Google Fonts: Inter & Noto Sans JP -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css?v=27">
+</head>
+<body class="flat-white-theme" data-font-size="large">
+  
+  <div class="app-layout">
+    
+    <!-- ミニマルヘッダー -->
+    <header class="flat-header">
+      <div class="header-left">
+        <div class="status-indicator">
+          <span class="live-dot" id="liveIndicator"></span>
+          <span class="status-text" id="speechStatus">マイク停止中</span>
+        </div>
+        <!-- 音量ビジュアライザー -->
+        <div class="volume-meter-wrapper" id="volumeMeterWrapper" style="display:none;" title="マイク入力音量">
+          <div class="volume-bar" id="volumeBar"></div>
+        </div>
+        <div class="translating-indicator" id="translatingIndicator" style="display:none;">
+          <span class="pulse-ring"></span>
+          <span class="indicator-text" id="indicatorText">通訳中...</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- 音声認識開始/停止ボタン -->
+        <button id="toggleMicBtn" class="btn-flat btn-mic" title="AI同時通訳の開始/停止">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+          <span id="micBtnText">通訳開始</span>
+        </button>
+
+        <!-- 文字サイズ調整 -->
+        <div class="font-size-toggle">
+          <button id="fontSizeNormal" class="btn-text-size" data-size="normal">中</button>
+          <button id="fontSizeLarge" class="btn-text-size active" data-size="large">大</button>
+          <button id="fontSizeXLarge" class="btn-text-size" data-size="xlarge">特大</button>
+        </div>
+
+        <!-- 履歴クリア -->
+        <button id="clearBtn" class="btn-flat btn-secondary" title="字幕をクリア">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18"/>
+            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+          </svg>
+          <span>クリア</span>
+        </button>
+
+        <!-- 全画面表示 -->
+        <button id="fullscreenBtn" class="btn-flat btn-secondary" title="全画面表示">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+        </button>
+
+        <!-- テキスト直接入力・貼り付け -->
+        <button id="toggleTextInputBtn" class="btn-flat btn-secondary" title="英語テキスト貼り付け/入力">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h8M6 16h.01M10 16h.01M14 16h.01M18 16h.01"/>
+          </svg>
+          <span>テキスト入力</span>
+        </button>
+
+        <!-- 設定 -->
+        <button id="settingsBtn" class="btn-flat btn-secondary" title="設定">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- クイックテキスト入力・貼り付けバー -->
+    <div class="manual-input-bar" id="manualInputBar" style="display:none;">
+      <input type="text" id="manualEnglishInput" class="manual-text-input" placeholder="英語の文章を貼り付け（または入力）して Enter / 通訳ボタン..." autocomplete="off">
+      <button id="sendManualTextBtn" class="btn-flat btn-primary btn-sm">通訳</button>
+      <button id="closeManualInputBtn" class="btn-flat btn-secondary btn-sm" title="閉じる">✕</button>
+    </div>
+
+    <!-- メイン：日本語がメインで自然に積み上がる字幕表示領域 -->
+    <main class="transcript-main" id="transcriptContainer">
+      
+      <!-- 確定した文章がどんどん積み上がっていくストリーム -->
+      <div class="committed-stream" id="committedStream">
+        <div class="welcome-placeholder" id="welcomePlaceholder">
+          <p class="welcome-lead">JCI福山 リアルタイム同時通訳字幕スクリーン</p>
+          <p class="welcome-sub">「通訳開始」を押すと、英語スピーチがリアルタイムで翻訳されます。</p>
+        </div>
+      </div>
+
+      <!-- 通訳中の最新プレビュー行 -->
+      <div class="live-active-block" id="liveActiveBlock" style="display:none;">
+        <div class="active-en-line" id="activeEnLine"></div>
+        <div class="active-ja-line" id="activeJaLine"></div>
+      </div>
+
+    </main>
+
+    <!-- フッター（JCIロゴ・余白トリミング済み特大表示） -->
+    <footer class="flat-footer">
+      <div class="footer-logo-wrapper">
+        <img src="assets/jci-logo.png" alt="JCI ロゴ" class="jci-logo-large">
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- 設定モーダル -->
+  <div class="modal-backdrop" id="settingsModal" style="display:none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>同時通訳システム設定</h3>
+        <button id="closeModalBtn" class="btn-close" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- 音声認識エンジン選択 -->
+        <div class="setting-item">
+          <label class="setting-label">音声認識エンジン</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="sttEngine" value="deepgram" checked>
+              <span><strong>Deepgram Nova-2 AI認識（推奨・TED/早口完全対応）</strong></span>
+            </label>
+            <span class="setting-hint" style="margin-left: 1.5rem; margin-top: -0.2rem;">
+              最先端クラウドAIによる超低遅延・高精度ストリーミング。早口・連続スピーチでも単語のブツ切りが起きず、句読点付きの綺麗な英文として認識されます。
+            </span>
+
+            <label class="radio-label" style="margin-top:0.4rem;">
+              <input type="radio" name="sttEngine" value="webspeech">
+              <span><strong>Web Speech API（ブラウザ標準・APIキー不要）</strong></span>
+            </label>
+            <span class="setting-hint" style="margin-left: 1.5rem; margin-top: -0.2rem;">
+              APIキー不要ですが、早口スピーチでは単語単位の細切れ認識やバッファ詰まりが発生する場合があります。
+            </span>
+          </div>
+        </div>
+
+        <!-- Deepgram APIキー設定 -->
+        <div class="setting-item" id="deepgramKeyRow">
+          <label class="setting-label">Deepgram API キー <span class="badge-required" style="background:#0284c7; color:#fff; font-size:0.75rem; padding:0.15rem 0.5rem; border-radius:4px;">無料枠 $200 (約200時間分) クレカ不要</span></label>
+          <input type="password" id="deepgramApiKeyInput" class="form-input" placeholder="例: 4a2b9c...">
+          <span class="setting-hint">
+            <a href="https://console.deepgram.com/signup" target="_blank" style="color:var(--primary); text-decoration:underline; font-weight:600;">Deepgram Console（console.deepgram.com）</a>で無料登録後、API Keysから「Create Key」をクリックして取得できます。
+          </span>
+        </div>
+
+        <!-- 通訳エンジン選択 -->
+        <div class="setting-item">
+          <label class="setting-label">通訳エンジン（和訳のスタイル）</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="interpreterMode" value="gemini-hybrid" checked>
+              <span><strong>Gemini AI ハイブリッド（推奨・自然な意訳 ＆ 0.8秒保証）</strong></span>
+            </label>
+            <span class="setting-hint" style="margin-left: 1.5rem; margin-top: -0.2rem;">
+              文脈を理解して格調高い日本語に意訳します（grit→「やり抜く力」など）。万が一 0.8 秒を超えた場合は即座に Google 翻訳へ自動フォールバックするため、テンポを絶対に崩しません。
+            </span>
+
+            <label class="radio-label" style="margin-top:0.4rem;">
+              <input type="radio" name="interpreterMode" value="google-web">
+              <span><strong>Google 翻訳（最速 0.05 秒・完全安定）</strong></span>
+            </label>
+            <span class="setting-hint" style="margin-left: 1.5rem; margin-top: -0.2rem;">
+              わずか 0.05 秒の超爆速レスポンス。直訳寄りですが、遅延が一切なく常に完璧なテンポで通訳されます。
+            </span>
+          </div>
+        </div>
+
+        <!-- Gemini APIキー設定 -->
+        <div class="setting-item" id="geminiKeyRow">
+          <label class="setting-label">Gemini API キー <span class="badge-required" style="background:#059669; color:#fff; font-size:0.75rem; padding:0.15rem 0.5rem; border-radius:4px;">無料枠あり</span></label>
+          <input type="password" id="geminiApiKeyInput" class="form-input" placeholder="例: AIzaSy...">
+          <span class="setting-hint">
+            <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--primary); text-decoration:underline; font-weight:600;">Google AI Studio（aistudio.google.com/apikey）</a>で無料取得したキーを入力してください。※未入力の場合は自動でGoogle翻訳で動作します。
+          </span>
+        </div>
+
+        <!-- 実際のスピーチ全文シミュレーション -->
+        <div class="setting-item">
+          <label class="setting-label">実際のスピーチ全文テスト（動作確認用）</label>
+          <div class="demo-buttons">
+            <button id="demoActualSpeechBtn" class="btn-flat btn-primary btn-sm">▶ 本番スピーチ全文デモ再生</button>
+            <button id="demoTedSpeechBtn" class="btn-flat btn-secondary btn-sm">▶ TEDスピーチ「Grit」デモ再生</button>
+          </div>
+          <span class="setting-hint">本番原稿またはTEDトーク「Grit」がどのように美しい文章として積み上がるかをテスト再生します。</span>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button id="saveSettingsBtn" class="btn-flat btn-primary">設定を保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=27"></script>
+</body>
+</html>
