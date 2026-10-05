@@ -17,10 +17,10 @@ const MIME_TYPES = {
   '.json': 'application/json'
 };
 
-// Google 翻訳 Web API（CORSゼロ・爆速）
-function translateWithGoogle(text) {
+// Google 翻訳 Web API（双方向対応・CORSゼロ・爆速）
+function translateWithGoogle(text, sl = 'en', tl = 'ja') {
   return new Promise((resolve, reject) => {
-    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=' + encodeURIComponent(text);
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=` + encodeURIComponent(text);
     const options = {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -55,23 +55,26 @@ function translateWithGoogle(text) {
   });
 }
 
-// Gemini 2.0 Flash / 1.5 Flash による文脈考慮の意訳
-function translateWithGemini(text, apiKey) {
+// Gemini 2.0 Flash / 1.5 Flash による文脈考慮の意訳（双方向対応）
+function translateWithGemini(text, apiKey, direction = 'en-ja') {
   return new Promise((resolve, reject) => {
     const model = 'gemini-2.0-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    const systemPrompt = direction === 'ja-en'
+      ? 'あなたはJCI国際講演会のプロ同時通訳者です。入力された日本語のスピーチや質問を、外国人登壇者向けのスクリーン字幕に最適な自然で格調高い英語に翻訳してください。前置きや解説、引用符は一切出力せず、英語訳のみを1行で出力してください。'
+      : 'あなたはJCI国際講演会のプロ同時通訳者です。入力された英語スピーチを、スクリーン字幕に最適な自然で格調高い日本語に翻訳してください。前置きや解説、引用符は一切出力せず、日本語訳のみを1行で出力してください。gritは「やり抜く力（グリット）」のように文脈に沿った自然な表現にしてください。';
+
     const payload = JSON.stringify({
       system_instruction: {
-        parts: [{
-          text: 'あなたはJCI国際講演会のプロ同時通訳者です。入力された英語スピーチを、スクリーン字幕に最適な自然で格調高い日本語に翻訳してください。前置きや解説、引用符は一切出力せず、日本語訳のみを1行で出力してください。gritは「やり抜く力（グリット）」のように文脈に沿った自然な表現にしてください。'
-        }]
+        parts: [{ text: systemPrompt }]
       },
       contents: [{
         parts: [{ text: text }]
       }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 200
+        maxOutputTokens: 250
       }
     });
 
@@ -117,28 +120,29 @@ function translateWithGemini(text, apiKey) {
 }
 
 // ハイブリッド翻訳（800msタイムアウト付き。超えたら0.05秒のGoogle翻訳へ自動フォールバック）
-async function translateHybrid(text, apiKey) {
+async function translateHybrid(text, apiKey, direction = 'en-ja') {
+  const [sl, tl] = direction === 'ja-en' ? ['ja', 'en'] : ['en', 'ja'];
   if (!apiKey) {
-    return await translateWithGoogle(text);
+    return await translateWithGoogle(text, sl, tl);
   }
 
-  const geminiPromise = translateWithGemini(text, apiKey);
+  const geminiPromise = translateWithGemini(text, apiKey, direction);
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Gemini 800ms timeout exceeded')), 800)
   );
 
   try {
-    const ja = await Promise.race([geminiPromise, timeoutPromise]);
-    if (ja && ja.length > 0) {
-      console.log(`[Gemini AI Hybrid Success]: "${ja}"`);
-      return ja;
+    const res = await Promise.race([geminiPromise, timeoutPromise]);
+    if (res && res.length > 0) {
+      console.log(`[Gemini AI Hybrid (${direction}) Success]: "${res}"`);
+      return res;
     }
   } catch (err) {
-    console.warn(`[Gemini Fallback -> Google Translate]: ${err.message}`);
+    console.warn(`[Gemini Fallback -> Google Translate (${direction})]: ${err.message}`);
   }
 
   // タイムアウトまたはエラー時は即座にGoogle翻訳（0.05秒）で返す！
-  return await translateWithGoogle(text);
+  return await translateWithGoogle(text, sl, tl);
 }
 
 // HTTP サーバー
@@ -161,21 +165,23 @@ const server = http.createServer(async (req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       try {
-        const { text, apiKey, mode } = JSON.parse(body);
+        const { text, apiKey, mode, direction } = JSON.parse(body);
         if (!text) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ error: 'Text required' }));
         }
 
-        let ja = '';
+        const dir = direction === 'ja-en' ? 'ja-en' : 'en-ja';
+        let translated = '';
         if (mode === 'gemini-hybrid' && apiKey) {
-          ja = await translateHybrid(text, apiKey);
+          translated = await translateHybrid(text, apiKey, dir);
         } else {
-          ja = await translateWithGoogle(text);
+          const [sl, tl] = dir === 'ja-en' ? ['ja', 'en'] : ['en', 'ja'];
+          translated = await translateWithGoogle(text, sl, tl);
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ja }));
+        res.end(JSON.stringify({ ja: translated, translated }));
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
@@ -215,6 +221,7 @@ wss.on('connection', (clientWs, req) => {
   let clientApiKey = '';
   let clientGeminiKey = '';
   let clientInterpreterMode = 'gemini-hybrid'; // 'gemini-hybrid' | 'google-web'
+  let clientDirection = 'en-ja'; // 'en-ja' (英語->日本語) | 'ja-en' (日本語->英語)
   let audioBufferQueue = [];
   let keepAliveInterval = null;
 
@@ -228,8 +235,15 @@ wss.on('connection', (clientWs, req) => {
           clientApiKey = (msg.apiKey || '').trim();
           clientGeminiKey = (msg.geminiApiKey || '').trim();
           clientInterpreterMode = msg.interpreterMode || 'gemini-hybrid';
-          console.log(`[WebSocket Start] Mode: ${clientInterpreterMode}, Gemini Key: ${clientGeminiKey ? 'Present' : 'None'}`);
+          clientDirection = msg.direction === 'ja-en' ? 'ja-en' : 'en-ja';
+          console.log(`[WebSocket Start] Direction: ${clientDirection}, Mode: ${clientInterpreterMode}, Gemini Key: ${clientGeminiKey ? 'Present' : 'None'}`);
           setupDeepgramConnection(clientApiKey);
+        } else if (msg.type === 'switch_direction') {
+          clientDirection = msg.direction === 'ja-en' ? 'ja-en' : 'en-ja';
+          console.log(`[WebSocket Switch Direction] New direction: ${clientDirection}`);
+          if (deepgramWs && clientApiKey) {
+            setupDeepgramConnection(clientApiKey);
+          }
         } else if (msg.type === 'stop') {
           closeDeepgram();
         }
@@ -266,30 +280,34 @@ wss.on('connection', (clientWs, req) => {
     closeDeepgram();
     audioBufferQueue = [];
 
-    // Deepgram Nova-2 リアルタイムストリーミングエンドポイント
-    // endpointing=700 (話者の自然な息継ぎ・ポーズ700msを待つことで途切れを防止)
-    const dgUrl = 'wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true&punctuate=true&interim_results=true&endpointing=700';
+    // 言語設定: en (英->日) または ja (日->英)
+    const dgLang = clientDirection === 'ja-en' ? 'ja' : 'en';
+    const dgUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&language=${dgLang}&smart_format=true&punctuate=true&interim_results=true&endpointing=700`;
 
     let accumulatedSentence = '';
     let lastTranslatedSentence = '';
 
     // 確定文をハイブリッド翻訳（Gemini AI 0.8秒保証 + Google 翻訳フォールバック）してクライアントへプッシュ
-    async function translateAndSend(cleanEn) {
-      if (!cleanEn || cleanEn.length < 2) return;
+    async function translateAndSend(cleanSource) {
+      if (!cleanSource || cleanSource.length < 2) return;
       try {
-        let ja = '';
+        let targetText = '';
         if (clientInterpreterMode === 'gemini-hybrid' && clientGeminiKey) {
-          ja = await translateHybrid(cleanEn, clientGeminiKey);
+          targetText = await translateHybrid(cleanSource, clientGeminiKey, clientDirection);
         } else {
-          ja = await translateWithGoogle(cleanEn);
+          const [sl, tl] = clientDirection === 'ja-en' ? ['ja', 'en'] : ['en', 'ja'];
+          targetText = await translateWithGoogle(cleanSource, sl, tl);
         }
 
-        if (ja) {
-          console.log(`[Translation Output]: "${ja}"`);
+        if (targetText) {
+          console.log(`[Translation Output (${clientDirection})]: "${cleanSource}" -> "${targetText}"`);
           clientWs.send(JSON.stringify({
             type: 'translation',
-            en: cleanEn,
-            ja: ja
+            source: cleanSource,
+            target: targetText,
+            direction: clientDirection,
+            en: clientDirection === 'ja-en' ? targetText : cleanSource,
+            ja: clientDirection === 'ja-en' ? cleanSource : targetText
           }));
         }
       } catch (trErr) {
@@ -297,36 +315,51 @@ wss.on('connection', (clientWs, req) => {
       }
     }
 
+    let currentDgWs = null;
     try {
-      deepgramWs = new WebSocket(dgUrl, {
+      currentDgWs = new WebSocket(dgUrl, {
         headers: {
           'Authorization': `Token ${apiKey}`
         }
       });
+      deepgramWs = currentDgWs;
 
-      deepgramWs.on('open', () => {
-        console.log('[Deepgram] Connected to Deepgram Nova-2 streaming API (endpointing: 700ms)');
-        clientWs.send(JSON.stringify({ type: 'deepgram_connected' }));
+      currentDgWs.on('open', () => {
+        if (deepgramWs !== currentDgWs) return; // 既に別の接続に切り替わっている場合は無視
+        console.log(`[Deepgram] Connected to Deepgram Nova-2 streaming API (${dgLang}, endpointing: 700ms)`);
+        clientWs.send(JSON.stringify({
+          type: 'deepgram_connected',
+          direction: clientDirection
+        }));
 
         // キューに溜まっていた音声チャンクを全て順序正しく送信
         if (audioBufferQueue.length > 0) {
           console.log(`[Deepgram] Flushing ${audioBufferQueue.length} buffered audio chunks`);
           while (audioBufferQueue.length > 0) {
             const chunk = audioBufferQueue.shift();
-            deepgramWs.send(chunk);
+            if (currentDgWs && currentDgWs.readyState === WebSocket.OPEN) {
+              try {
+                currentDgWs.send(chunk);
+              } catch (sendErr) {
+                console.warn('[Deepgram Buffer Send Error]:', sendErr.message);
+              }
+            }
           }
         }
 
         // Deepgramのアイドル切断（10秒）を防ぐための定期KeepAlive
         clearInterval(keepAliveInterval);
         keepAliveInterval = setInterval(() => {
-          if (deepgramWs && deepgramWs.readyState === WebSocket.OPEN) {
-            deepgramWs.send(JSON.stringify({ type: 'KeepAlive' }));
+          if (currentDgWs && currentDgWs.readyState === WebSocket.OPEN) {
+            try {
+              currentDgWs.send(JSON.stringify({ type: 'KeepAlive' }));
+            } catch (e) {}
           }
         }, 5000);
       });
 
-      deepgramWs.on('message', async (data) => {
+      currentDgWs.on('message', async (data) => {
+        if (deepgramWs !== currentDgWs) return;
         try {
           const res = JSON.parse(data.toString());
 
@@ -342,8 +375,30 @@ wss.on('connection', (clientWs, req) => {
 
           const alt = res?.channel?.alternatives?.[0];
           const transcript = (alt?.transcript || '').trim();
+          const confidence = alt?.confidence ?? 1.0;
           const isFinal = res?.is_final || false;
           const speechFinal = res?.speech_final || false;
+
+          // ★【英日モード時の日本語・ノイズ誤爆防止（スキップ判定）】
+          if (clientDirection === 'en-ja' && transcript) {
+            // 1. confidence が極端に低い（< 0.40）場合は誤爆空耳とみなして無視
+            if (confidence < 0.40) {
+              console.log(`[Noise/Japanese Skipped (low confidence: ${confidence})]: "${transcript}"`);
+              return;
+            }
+            // 2. 日本語文字（ひらがな・カタカナ・漢字）が含まれる場合はスキップ
+            if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(transcript)) {
+              console.log(`[Japanese in English mode Skipped]: "${transcript}"`);
+              return;
+            }
+            // 3. 無意味な母音や相槌の単独断片（例: "ah", "uh", "eh", "oh", "um", "hai" 等）をスキップ
+            const lower = transcript.toLowerCase().replace(/[^a-z]/g, '');
+            const noiseWords = ['ah', 'uh', 'um', 'eh', 'oh', 'hai', 'un', 'ha', 'er'];
+            if (noiseWords.includes(lower)) {
+              console.log(`[Noise filler Skipped]: "${transcript}"`);
+              return;
+            }
+          }
 
           // 1. クライアントへリアルタイム認識プレビューを配信
           if (transcript) {
@@ -351,47 +406,74 @@ wss.on('connection', (clientWs, req) => {
               type: 'transcript',
               text: transcript,
               isFinal: isFinal,
-              speechFinal: speechFinal
+              speechFinal: speechFinal,
+              direction: clientDirection
             }));
 
             if (isFinal) {
-              accumulatedSentence += (accumulatedSentence ? ' ' : '') + transcript;
+              const delimiter = clientDirection === 'ja-en' ? '' : ' ';
+              accumulatedSentence += (accumulatedSentence ? delimiter : '') + transcript;
             }
           }
 
-          // 2. 【完全な文（. ? !）基準のスマート抽出アルゴリズム】
-          // 文の途中でぶった切らず、ピリオド等の文末記号が来た完結文のみを切り出して翻訳！
-          // 未完の断片はバッファに残して次の文とつなげる。
+          // 2. 【完全な文基準のスマート抽出アルゴリズム】
           let trimmedAcc = accumulatedSentence.trim();
 
-          // 文末記号（. ? !）で区切られた完全な文をループで全て処理
-          let match;
-          while ((match = /(^.*?[.?!])(?:\s+|$)(.*)/s.exec(trimmedAcc)) !== null) {
-            const completeSentence = match[1].trim();
-            trimmedAcc = (match[2] || '').trim();
-            accumulatedSentence = trimmedAcc; // 未完部分だけバッファに残す
+          if (clientDirection === 'ja-en') {
+            // 【日本語認識モード】句読点「。」「！？\n」で完結文を抽出
+            let jaMatch;
+            while ((jaMatch = /(^.*?[。！？\n])(?:\s*|$)(.*)/s.exec(trimmedAcc)) !== null) {
+              const completeSentence = jaMatch[1].trim();
+              trimmedAcc = (jaMatch[2] || '').trim();
+              accumulatedSentence = trimmedAcc;
 
-            if (completeSentence.length > 2 && completeSentence !== lastTranslatedSentence) {
-              lastTranslatedSentence = completeSentence;
-              console.log(`[Deepgram] Complete sentence: "${completeSentence}"`);
-              translateAndSend(completeSentence);
+              if (completeSentence.length >= 2 && completeSentence !== lastTranslatedSentence) {
+                lastTranslatedSentence = completeSentence;
+                console.log(`[Deepgram JA] Complete sentence: "${completeSentence}"`);
+                translateAndSend(completeSentence);
+              }
             }
-          }
 
-          // 3. 話者が一息ついた（speechFinal: 700msのポーズ）が、ピリオドが付かなかった場合の救済
-          if (speechFinal && trimmedAcc.length > 3) {
-            const words = trimmedAcc.split(/\s+/).filter(Boolean);
-            const danglingWords = ['the', 'a', 'an', 'of', 'to', 'in', 'on', 'at', 'and', 'or', 'but', 'that', 'with', 'for', 'as', 'is', 'was', 'are', 'were'];
-            const lastWord = words[words.length - 1].toLowerCase().replace(/[^a-z]/g, '');
-
-            // 末尾が接続詞・前置詞等でなく、3単語以上あれば安全に確定
-            if (!danglingWords.includes(lastWord) && words.length >= 3) {
+            // 話者が一息ついた（speechFinal: 700msのポーズ）が句読点がつかなかった場合の救済
+            if (speechFinal && trimmedAcc.length >= 4) {
               const sentenceToCommit = trimmedAcc;
               accumulatedSentence = '';
               if (sentenceToCommit !== lastTranslatedSentence) {
                 lastTranslatedSentence = sentenceToCommit;
-                console.log(`[Deepgram] SpeechFinal pause commit: "${sentenceToCommit}"`);
+                console.log(`[Deepgram JA] SpeechFinal pause commit: "${sentenceToCommit}"`);
                 translateAndSend(sentenceToCommit);
+              }
+            }
+
+          } else {
+            // 【英語認識モード】ピリオド等の文末記号（. ? !）で完結文を抽出
+            let enMatch;
+            while ((enMatch = /(^.*?[.?!])(?:\s+|$)(.*)/s.exec(trimmedAcc)) !== null) {
+              const completeSentence = enMatch[1].trim();
+              trimmedAcc = (enMatch[2] || '').trim();
+              accumulatedSentence = trimmedAcc;
+
+              if (completeSentence.length > 2 && completeSentence !== lastTranslatedSentence) {
+                lastTranslatedSentence = completeSentence;
+                console.log(`[Deepgram EN] Complete sentence: "${completeSentence}"`);
+                translateAndSend(completeSentence);
+              }
+            }
+
+            // 話者が一息ついた（speechFinal: 700msのポーズ）がピリオドが付かなかった場合の救済
+            if (speechFinal && trimmedAcc.length > 3) {
+              const words = trimmedAcc.split(/\s+/).filter(Boolean);
+              const danglingWords = ['the', 'a', 'an', 'of', 'to', 'in', 'on', 'at', 'and', 'or', 'but', 'that', 'with', 'for', 'as', 'is', 'was', 'are', 'were'];
+              const lastWord = words[words.length - 1].toLowerCase().replace(/[^a-z]/g, '');
+
+              if (!danglingWords.includes(lastWord) && words.length >= 3) {
+                const sentenceToCommit = trimmedAcc;
+                accumulatedSentence = '';
+                if (sentenceToCommit !== lastTranslatedSentence) {
+                  lastTranslatedSentence = sentenceToCommit;
+                  console.log(`[Deepgram EN] SpeechFinal pause commit: "${sentenceToCommit}"`);
+                  translateAndSend(sentenceToCommit);
+                }
               }
             }
           }
@@ -400,7 +482,8 @@ wss.on('connection', (clientWs, req) => {
         }
       });
 
-      deepgramWs.on('error', (err) => {
+      currentDgWs.on('error', (err) => {
+        if (deepgramWs !== currentDgWs) return;
         console.error('[Deepgram WS Error]:', err.message);
         clientWs.send(JSON.stringify({
           type: 'error',
@@ -408,11 +491,13 @@ wss.on('connection', (clientWs, req) => {
         }));
       });
 
-      deepgramWs.on('close', (code, reason) => {
+      currentDgWs.on('close', (code, reason) => {
         console.log(`[Deepgram] Disconnected (code: ${code}, reason: ${reason})`);
-        clearInterval(keepAliveInterval);
-        clientWs.send(JSON.stringify({ type: 'deepgram_disconnected' }));
-        deepgramWs = null;
+        if (deepgramWs === currentDgWs) {
+          clearInterval(keepAliveInterval);
+          deepgramWs = null;
+          clientWs.send(JSON.stringify({ type: 'deepgram_disconnected' }));
+        }
       });
 
     } catch (err) {
@@ -428,10 +513,15 @@ wss.on('connection', (clientWs, req) => {
     clearInterval(keepAliveInterval);
     audioBufferQueue = [];
     if (deepgramWs) {
-      try {
-        deepgramWs.close();
-      } catch (e) {}
+      const oldWs = deepgramWs;
       deepgramWs = null;
+      try {
+        oldWs.onopen = null;
+        oldWs.onmessage = null;
+        oldWs.onerror = null;
+        oldWs.onclose = null;
+        oldWs.close();
+      } catch (e) {}
     }
   }
 

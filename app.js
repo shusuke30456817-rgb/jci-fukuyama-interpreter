@@ -10,6 +10,7 @@
   // --- アプリケーション状態 ---
   const state = {
     isRecording: false,
+    direction: 'en-ja', // 'en-ja' (英語->日本語・通常モード) | 'ja-en' (日本語->英語・質疑応答モード)
     apiKey: '', // Gemini API Key
     deepgramApiKey: '', // Deepgram API Key
     sttEngine: 'deepgram', // 'deepgram' (推奨・TED/早口完全対応) | 'webspeech'
@@ -88,6 +89,10 @@
     toggleMicBtn: document.getElementById('toggleMicBtn'),
     micBtnText: document.getElementById('micBtnText'),
 
+    // 通訳方向切り替え
+    toggleDirectionBtn: document.getElementById('toggleDirectionBtn'),
+    directionBadge: document.getElementById('directionBadge'),
+
     fontSizeBtns: document.querySelectorAll('.font-size-toggle button'),
     clearBtn: document.getElementById('clearBtn'),
     fullscreenBtn: document.getElementById('fullscreenBtn'),
@@ -122,8 +127,30 @@
     setupEventListeners();
   }
 
+  function updateDirectionUI() {
+    if (!dom.toggleDirectionBtn || !dom.directionBadge) return;
+    if (state.direction === 'ja-en') {
+      dom.directionBadge.textContent = '🇯🇵 日 ➔ 🇺🇸 英';
+      dom.toggleDirectionBtn.classList.add('ja-en');
+      dom.toggleDirectionBtn.title = '通訳方向: 日本語（質問）➔ 英語（登壇者向け字幕）\nクリックで英日モードへ切替';
+      if (dom.manualEnglishInput) {
+        dom.manualEnglishInput.placeholder = '日本語の文章・質問を入力（または貼り付け）して Enter / 通訳...';
+      }
+    } else {
+      dom.directionBadge.textContent = '🇺🇸 英 ➔ 🇯🇵 日';
+      dom.toggleDirectionBtn.classList.remove('ja-en');
+      dom.toggleDirectionBtn.title = '通訳方向: 英語スピーチ ➔ 日本語字幕（通常モード・日本語ノイズ自動スキップ）\nクリックで日英モードへ切替';
+      if (dom.manualEnglishInput) {
+        dom.manualEnglishInput.placeholder = '英語の文章を貼り付け（または入力）して Enter / 通訳ボタン...';
+      }
+    }
+  }
+
   function loadSettings() {
     try {
+      const savedDirection = localStorage.getItem('jci_direction');
+      if (savedDirection) state.direction = savedDirection;
+
       const savedFontSize = localStorage.getItem('jci_font_size');
       if (savedFontSize) state.fontSize = savedFontSize;
 
@@ -311,13 +338,14 @@
     state.webSocket = ws;
 
     ws.onopen = () => {
-      console.log(`[WebSocket] Connected to local server, mode: ${state.interpreterMode}`);
-      // Deepgramストリーミング開始要求を送信
+      console.log(`[WebSocket] Connected to local server, mode: ${state.interpreterMode}, direction: ${state.direction}`);
+      // Deepgramストリーミング開始要求を送信（directionを付与）
       ws.send(JSON.stringify({
         type: 'start',
         apiKey: state.deepgramApiKey,
         geminiApiKey: state.apiKey,
-        interpreterMode: state.interpreterMode
+        interpreterMode: state.interpreterMode,
+        direction: state.direction
       }));
     };
 
@@ -326,8 +354,11 @@
         const msg = JSON.parse(event.data);
 
         if (msg.type === 'deepgram_connected') {
-          console.log('[Deepgram] Backend connected to Deepgram Nova-2. Starting audio recorder...');
-          dom.speechStatus.textContent = '🎙️ Deepgram Nova-2 AI 待機中（英語スピーチを受信中）';
+          console.log(`[Deepgram] Backend connected (${msg.direction || state.direction}). Starting audio recorder...`);
+          const directionText = state.direction === 'ja-en'
+            ? '🎙️ Deepgram AI 待機中（日本語の質問を受信中）'
+            : '🎙️ Deepgram AI 待機中（英語スピーチを受信中・日本語ノイズ自動スキップ）';
+          dom.speechStatus.textContent = directionText;
           dom.speechStatus.className = 'status-text listening';
 
           // ★ Deepgramの接続確立を待ってから、WebMコンテナヘッダー付きで生音声を送信開始！
@@ -339,13 +370,15 @@
           if (msg.text) {
             dom.liveActiveBlock.style.display = 'flex';
             dom.activeEnLine.textContent = msg.text;
-            dom.activeJaLine.textContent = '⚡ AIがリアルタイム通訳中...';
+            dom.activeJaLine.textContent = state.direction === 'ja-en' ? '⚡ AIが英語へ翻訳中...' : '⚡ AIが日本語へ通訳中...';
             smartScrollToBottom();
           }
         } else if (msg.type === 'translation') {
-          // 確定した英日翻訳が届いたら画面に美しいブロックとして積み上げ！
-          if (msg.en && msg.ja) {
-            appendCommittedBlock(msg.en, msg.ja);
+          // 確定した翻訳が届いたら画面に美しいブロックとして積み上げ！
+          const sourceText = msg.source || (state.direction === 'ja-en' ? msg.ja : msg.en);
+          const targetText = msg.target || (state.direction === 'ja-en' ? msg.en : msg.ja);
+          if (sourceText && targetText) {
+            appendCommittedBlock(sourceText, targetText, msg.direction || state.direction);
             dom.liveActiveBlock.style.display = 'none';
             dom.activeEnLine.textContent = '';
             dom.activeJaLine.textContent = '';
@@ -450,15 +483,16 @@
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
+    recognition.lang = state.direction === 'ja-en' ? 'ja-JP' : 'en-US';
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
+      const langLabel = state.direction === 'ja-en' ? '日本語' : '英語';
       dom.speechStatus.textContent = state.interpreterMode === 'gemini-text'
-        ? 'Gemini AI 待機中（英語）'
-        : 'Google 翻訳 待機中（超高速）';
+        ? `Gemini AI 待機中（${langLabel}）`
+        : `Google 翻訳 待機中（${langLabel}）`;
       dom.speechStatus.className = 'status-text listening';
     };
 
@@ -556,48 +590,53 @@
   }
 
   // 確定した英文を 爆速通訳して画面に積み上げる（タイムラグ0.05秒）
-  async function processFinalEnglishSentence(englishText) {
-    if (!englishText || englishText.length < 2) return;
+  // 確定した文章を 爆速通訳して画面に積み上げる（タイムラグ0.05秒）
+  async function processFinalEnglishSentence(inputText) {
+    if (!inputText || inputText.length < 2) return;
 
     setTranslating(true);
     dom.liveActiveBlock.style.display = 'flex';
-    dom.activeEnLine.textContent = englishText;
+    dom.activeEnLine.textContent = inputText;
     dom.activeJaLine.textContent = '✨ 通訳中...';
     smartScrollToBottom();
 
-    let translatedJa = '';
+    let translatedResult = '';
 
     try {
       if (state.interpreterMode === 'gemini-text') {
-        translatedJa = await Promise.race([
-          translateWithGeminiText(englishText),
+        translatedResult = await Promise.race([
+          translateWithGeminiText(inputText),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2500))
         ]);
       } else {
-        translatedJa = await translateWithGoogleWeb(englishText);
+        translatedResult = await translateWithGoogleWeb(inputText);
       }
     } catch (err) {
       console.warn('Translation fallback to Google Translate:', err.message);
       try {
-        translatedJa = await translateWithGoogleWeb(englishText);
+        translatedResult = await translateWithGoogleWeb(inputText);
       } catch (fbErr) {
         console.error('Fallback also failed:', fbErr);
-        translatedJa = '（通訳完了）';
+        translatedResult = '（通訳完了）';
       }
     }
 
-    if (translatedJa) {
-      appendCommittedBlock(englishText, translatedJa);
-      state.recentContext.push({ en: englishText, ja: translatedJa });
+    if (translatedResult) {
+      appendCommittedBlock(inputText, translatedResult, state.direction);
+      state.recentContext.push({
+        en: state.direction === 'ja-en' ? translatedResult : inputText,
+        ja: state.direction === 'ja-en' ? inputText : translatedResult
+      });
       if (state.recentContext.length > 3) state.recentContext.shift();
 
       dom.speechStatus.textContent = '✅ 通訳完了・次の発話をどうぞ';
       dom.speechStatus.className = 'status-text listening';
       setTimeout(() => {
         if (state.isRecording) {
+          const langLabel = state.direction === 'ja-en' ? '日本語' : '英語';
           dom.speechStatus.textContent = state.interpreterMode === 'gemini-text'
-            ? 'Gemini AI 待機中（英語）'
-            : 'Google 翻訳 待機中（超高速）';
+            ? `Gemini AI 待機中（${langLabel}）`
+            : `Google 翻訳 待機中（${langLabel}）`;
         }
       }, 1500);
     }
@@ -618,12 +657,15 @@
         body: JSON.stringify({
           text,
           apiKey: state.apiKey,
-          mode: state.interpreterMode
+          mode: state.interpreterMode,
+          direction: state.direction
         })
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && data.ja) return data.ja.trim();
+        if (data && (data.translated || data.ja)) {
+          return (data.translated || data.ja).trim();
+        }
       }
     } catch (e) {
       console.warn('/api/translate failed:', e);
@@ -691,15 +733,26 @@
   // ==========================================================================
   // 文章ブロックの確定追加 ＆ スムーズ自動追従スクロール
   // ==========================================================================
-  function appendCommittedBlock(enText, jaText) {
+  function appendCommittedBlock(sourceText, targetText, direction = state.direction) {
     hideWelcomePlaceholder();
 
     const block = document.createElement('div');
-    block.className = 'sentence-block';
-    block.innerHTML = `
-      <div class="sentence-en">${escapeHtml(enText)}</div>
-      <div class="sentence-ja">${escapeHtml(jaText)}</div>
-    `;
+    block.className = 'sentence-block ' + (direction === 'ja-en' ? 'mode-ja-en' : 'mode-en-ja');
+
+    if (direction === 'ja-en') {
+      // 日英モード: 日本語(質問原文)が上・小さめ、英語(翻訳)が下・特大（外国人登壇者向け）
+      block.innerHTML = `
+        <div class="sentence-ja">${escapeHtml(sourceText)}</div>
+        <div class="sentence-en">${escapeHtml(targetText)}</div>
+      `;
+    } else {
+      // 英日モード: 英語(原文)が上・小さめ、日本語(翻訳)が下・特大（日本人聴衆向け）
+      block.innerHTML = `
+        <div class="sentence-en">${escapeHtml(sourceText)}</div>
+        <div class="sentence-ja">${escapeHtml(targetText)}</div>
+      `;
+    }
+
     dom.committedStream.appendChild(block);
     smartScrollToBottom();
   }
@@ -823,6 +876,30 @@
         startInterpreting();
       }
     });
+
+    // 通訳方向切り替えボタン（英日 / 日英）
+    if (dom.toggleDirectionBtn) {
+      dom.toggleDirectionBtn.addEventListener('click', () => {
+        state.direction = state.direction === 'en-ja' ? 'ja-en' : 'en-ja';
+        try { localStorage.setItem('jci_direction', state.direction); } catch (e) {}
+        updateDirectionUI();
+
+        const isJaEn = state.direction === 'ja-en';
+        const msg = isJaEn
+          ? '【質疑応答モード：日 ➔ 英】に切り替えました。日本語の質問を認識し、登壇者向けに英語訳を表示します。'
+          : '【通常モード：英 ➔ 日】に切り替えました。英語スピーチを通訳し、日本語ノイズ・咳を自動スキップします。';
+        showNotification(msg);
+
+        // もし録音・通訳が進行中なら、安全に新言語ストリームへ再同期！
+        if (state.isRecording) {
+          showNotification(msg + '（通訳ストリームを切り替え中...）');
+          stopInterpreting();
+          setTimeout(() => {
+            startInterpreting();
+          }, 120);
+        }
+      });
+    }
 
     // クイックテキスト入力バーの開閉
     if (dom.toggleTextInputBtn) {

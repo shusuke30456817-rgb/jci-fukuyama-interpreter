@@ -35,6 +35,14 @@
       </div>
 
       <div class="header-actions">
+        <!-- 通訳方向切り替えボタン（英日 / 日英） -->
+        <button id="toggleDirectionBtn" class="btn-flat btn-direction" title="通訳方向の切り替え（クリックで英日/日英をトグル）">
+          <svg class="icon icon-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4"/>
+          </svg>
+          <span id="directionBadge">🇺🇸 英 ➔ 🇯🇵 日</span>
+        </button>
+
         <!-- 音声認識開始/停止ボタン -->
         <button id="toggleMicBtn" class="btn-flat btn-mic" title="AI同時通訳の開始/停止">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">

@@ -232,6 +232,30 @@ body {
   color: #0f172a;
 }
 
+/* 通訳方向切替ボタン */
+.btn-direction {
+  background: #f8fafc;
+  color: var(--primary);
+  border: 1px solid #e2e8f0;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.btn-direction:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.btn-direction.ja-en {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.btn-direction.ja-en:hover {
+  background: #dbeafe;
+}
+
 /* 文字サイズ切り替えピル */
 .font-size-toggle {
   display: flex;
@@ -395,6 +419,23 @@ body {
   font-weight: 800;
   letter-spacing: -0.015em;
   word-break: break-word;
+}
+
+/* 日英モード（質問応答・登壇者向け）の最適化レイアウト */
+.sentence-block.mode-ja-en .sentence-en {
+  font-size: var(--font-ja);
+  line-height: var(--line-height-ja);
+  color: var(--text-ja-main);
+  font-weight: 800;
+  order: 2;
+}
+
+.sentence-block.mode-ja-en .sentence-ja {
+  font-size: var(--font-en);
+  line-height: var(--line-height-en);
+  color: var(--text-en-sub);
+  font-weight: 500;
+  order: 1;
 }
 
 .live-active-block {
